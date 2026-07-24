@@ -4,10 +4,450 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Réalba - Générateur de Rapports</title>
-    <link rel="stylesheet" href="styles.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bleu: #2E75B6;
+            --bleu-fonce: #1a4d7a;
+            --gris: #5f5e5a;
+            --gris-clair: #f1efe8;
+            --bord: #d3d1c7;
+            --texte: #1a1a1a;
+            --vert: #3b6d11;
+            --rouge: #a32d2d;
+            --blanc: #ffffff;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--texte);
+            background: linear-gradient(135deg, #faf9f6 0%, #f0ede8 100%);
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background: var(--bleu);
+            color: white;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        .navbar h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .navbar p {
+            font-size: 13px;
+            opacity: 0.9;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+
+        .card {
+            background: var(--blanc);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            border: 1px solid var(--bord);
+        }
+
+        .card h2 {
+            font-size: 18px;
+            color: var(--bleu-fonce);
+            margin-bottom: 15px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--gris-clair);
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            margin-top: 15px;
+        }
+
+        label:first-of-type {
+            margin-top: 0;
+        }
+
+        input[type="text"],
+        input[type="date"],
+        input[type="password"],
+        textarea,
+        select {
+            width: 100%;
+            padding: 11px 13px;
+            border: 1px solid var(--bord);
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.2s ease;
+        }
+
+        input[type="text"]:focus,
+        input[type="date"]:focus,
+        input[type="password"]:focus,
+        textarea:focus,
+        select:focus {
+            outline: none;
+            border-color: var(--bleu);
+            box-shadow: 0 0 0 3px rgba(46, 117, 182, 0.1);
+        }
+
+        textarea {
+            resize: vertical;
+            line-height: 1.6;
+            min-height: 120px;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 11px 22px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-right: 10px;
+            margin-top: 15px;
+        }
+
+        .btn-primary {
+            background: var(--bleu);
+            color: var(--blanc);
+        }
+
+        .btn-primary:hover {
+            background: var(--bleu-fonce);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(46, 117, 182, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--gris-clair);
+            color: var(--texte);
+            border: 1px solid var(--bord);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bord);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .hint {
+            font-size: 12px;
+            color: var(--gris);
+            margin-top: 6px;
+        }
+
+        .hint a {
+            color: var(--bleu);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .hint a:hover {
+            text-decoration: underline;
+        }
+
+        .api-panel {
+            background: #e8f4f8;
+            border: 1px solid #4da6d6;
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+
+        .api-panel .badge {
+            display: inline-block;
+            background: var(--vert);
+            color: var(--blanc);
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            margin-left: 8px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--bord);
+            padding-bottom: 15px;
+        }
+
+        .tab-btn {
+            padding: 12px 24px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--gris);
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .tab-btn.active {
+            color: var(--bleu);
+            border-bottom-color: var(--bleu);
+        }
+
+        .tab-btn:hover {
+            color: var(--bleu-fonce);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .sections-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+
+        .section-btn {
+            padding: 15px;
+            background: var(--gris-clair);
+            border: 2px solid var(--bord);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+
+        .section-btn:hover {
+            border-color: var(--bleu);
+            box-shadow: 0 4px 12px rgba(46, 117, 182, 0.15);
+        }
+
+        .section-btn.active {
+            background: #eaf2fa;
+            border-color: var(--bleu);
+        }
+
+        .section-btn .icon {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .section-btn h3 {
+            font-size: 14px;
+            color: var(--bleu-fonce);
+            margin-bottom: 5px;
+        }
+
+        .thumbnails {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 15px;
+        }
+
+        .thumbnail {
+            position: relative;
+            width: 90px;
+            height: 70px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--bord);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .thumbnail:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            transform: scale(1.05);
+        }
+
+        .thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .thumbnail .remove-btn {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 22px;
+            height: 22px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .message {
+            padding: 14px 16px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 13px;
+        }
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .dropzone {
+            border: 2px dashed var(--bord);
+            border-radius: 10px;
+            padding: 30px 20px;
+            text-align: center;
+            color: var(--gris);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: var(--gris-clair);
+            margin: 15px 0;
+        }
+
+        .dropzone:hover {
+            border-color: var(--bleu);
+            background: #eaf2fa;
+            color: var(--bleu);
+        }
+    </style>
 </head>
 <body>
-    <div id="app"></div>
+    <div class="navbar">
+        <h1>📋 Réalba - Générateur de Rapports</h1>
+        <p>Application web pour générer rapidement vos rapports d'intervention</p>
+    </div>
+
+    <div class="container">
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="setup">1. Configuration</button>
+            <button class="tab-btn" data-tab="editor">2. Édition</button>
+            <button class="tab-btn" data-tab="preview">3. Aperçu</button>
+        </div>
+
+        <!-- TAB: SETUP -->
+        <div class="tab-content active" id="setup">
+            <div class="card">
+                <div class="api-panel">
+                    <label>🔑 Clé API Google Gemini <span id="api-status"></span></label>
+                    <input type="password" id="api-key" placeholder="Votre clé Gemini ici...">
+                    <div class="hint">
+                        <strong>100% gratuit !</strong> Obtenez votre clé sur
+                        <a href="https://aistudio.google.com/app/apikeys" target="_blank">aistudio.google.com/app/apikeys</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>1️⃣ Dossier et Affaire</h2>
+                <label>Numéro de dossier</label>
+                <input type="text" id="dossier" placeholder="ex: 2796">
+                <label>Nom de l'affaire (adresse)</label>
+                <input type="text" id="affaire-nom" placeholder="ex: 28/30 rue d'Issy, 92100 Boulogne">
+                <label>Date d'intervention</label>
+                <input type="date" id="date-intervention">
+            </div>
+
+            <div class="card">
+                <h2>2️⃣ Ordre de Service</h2>
+                <div class="dropzone" id="os-drop">📄 Déposer PDF ou texte</div>
+                <input type="file" id="os-file" accept="application/pdf" style="display:none;">
+                <label>Ou collez le texte du mail/OS</label>
+                <textarea id="os-text" placeholder="Merci d'intervenir sur..."></textarea>
+            </div>
+
+            <div class="card">
+                <h2>3️⃣ Rapport Brut du Technicien</h2>
+                <textarea id="tech-report" placeholder="Observations, tests réalisés, résultats..."></textarea>
+                <div class="hint">Base pour la génération IA de chaque section</div>
+            </div>
+
+            <div class="card">
+                <h2>4️⃣ Photos de l'Intervention</h2>
+                <div class="dropzone" id="photos-drop">📸 Ajouter vos photos</div>
+                <input type="file" id="photos-file" accept="image/*" multiple style="display:none;">
+                <div class="thumbnails" id="photo-thumbs"></div>
+            </div>
+
+            <button class="btn btn-primary" id="go-editor">Continuer vers l'édition →</button>
+        </div>
+
+        <!-- TAB: EDITOR -->
+        <div class="tab-content" id="editor">
+            <div class="card">
+                <h2>Titre du Rapport</h2>
+                <input type="text" id="titre-input" placeholder="Titre du rapport">
+            </div>
+
+            <div class="card">
+                <h2>Sections</h2>
+                <div class="sections-grid" id="sections-container"></div>
+            </div>
+
+            <div class="card">
+                <h2 id="section-title">Titre</h2>
+                <div style="display: flex; justify-content: space-between;">
+                    <h3 style="margin-bottom: 15px;">Texte</h3>
+                    <button class="btn btn-secondary" id="gen-ai-btn" style="margin: 0;">✨ Générer avec l'IA</button>
+                </div>
+                <textarea id="section-text"></textarea>
+                <div id="photos-section"></div>
+            </div>
+        </div>
+
+        <!-- TAB: PREVIEW -->
+        <div class="tab-content" id="preview">
+            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <button class="btn btn-secondary" id="back-preview">← Retour</button>
+                <button class="btn btn-primary" id="generate-docx">📥 Télécharger Word</button>
+                <button class="btn btn-primary" id="generate-pdf">📥 Télécharger PDF</button>
+            </div>
+            <div class="card" id="preview-content" style="max-width: 800px; margin: 0 auto;">
+                <!-- Preview rendered here -->
+            </div>
+        </div>
+    </div>
+
     <script src="app.js"></script>
 </body>
 </html>
