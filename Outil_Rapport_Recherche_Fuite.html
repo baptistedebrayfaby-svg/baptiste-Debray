@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Générateur de rapport — Recherche de fuite</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.js"></script>
+<style>
+:root{
+  --bleu:#2E75B6; --bleu-fonce:#1a4d7a; --gris:#5f5e5a; --gris-clair:#f1efe8;
+  --bord:#d3d1c7; --texte:#1a1a1a; --vert:#3b6d11; --rouge:#a32d2d;
+}
+*{box-sizing:border-box;}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;color:var(--texte);background:#faf9f6;}
+.screen{display:none;min-height:100vh;}
+.screen.active{display:block;}
+
+/* --- Ecran 1 : choix type --- */
+#screen-type{display:none;align-items:center;justify-content:center;min-height:100vh;padding:40px;}
+#screen-type.active{display:flex;}
+.type-wrap{max-width:900px;width:100%;text-align:center;}
+.type-wrap h1{font-size:26px;color:var(--bleu-fonce);margin-bottom:8px;}
+.type-wrap p.sub{color:var(--gris);margin-bottom:32px;}
+.type-cards{display:flex;gap:20px;flex-wrap:wrap;justify-content:center;}
+.type-card{width:260px;padding:28px 20px;border:1px solid var(--bord);border-radius:10px;background:#fff;cursor:pointer;transition:.15s;}
+.type-card:hover{border-color:var(--bleu);box-shadow:0 2px 10px rgba(46,117,182,.15);}
+.type-card.disabled{opacity:.45;cursor:not-allowed;}
+.type-card .num{width:36px;height:36px;border-radius:50%;background:var(--bleu);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:bold;margin:0 auto 14px;}
+.type-card h3{font-size:16px;margin:0 0 6px;}
+.type-card p{font-size:13px;color:var(--gris);margin:0;}
+
+/* --- Ecran 2 : setup --- */
+#screen-setup .wrap, #screen-editor .wrap, #screen-preview .wrap{max-width:980px;margin:0 auto;padding:30px 24px 80px;}
+.panel{background:#fff;border:1px solid var(--bord);border-radius:10px;padding:22px 26px;margin-bottom:20px;}
+.panel h2{font-size:16px;color:var(--bleu-fonce);margin:0 0 16px;border-bottom:1px solid var(--gris-clair);padding-bottom:8px;}
+label{display:block;font-size:13px;font-weight:bold;color:#333;margin:12px 0 4px;}
+label:first-child{margin-top:0;}
+input[type=text],input[type=date],textarea,select{width:100%;padding:9px 10px;border:1px solid var(--bord);border-radius:6px;font-size:14px;font-family:inherit;}
+textarea{resize:vertical;line-height:1.5;}
+.row{display:flex;gap:16px;}
+.row > div{flex:1;}
+.hint{font-size:12px;color:var(--gris);margin-top:4px;}
+.btn{display:inline-block;background:#fff;border:1px solid var(--bleu);color:var(--bleu);padding:9px 18px;border-radius:6px;font-size:14px;cursor:pointer;font-weight:bold;}
+.btn:hover{background:#eaf2fa;}
+.btn-primary{background:var(--bleu);color:#fff;}
+.btn-primary:hover{background:var(--bleu-fonce);}
+.btn-small{padding:5px 11px;font-size:12px;}
+.btn-danger{border-color:var(--rouge);color:var(--rouge);}
+.btn-danger:hover{background:#fbeaea;}
+.btn[disabled]{opacity:.4;cursor:not-allowed;}
+.suggestions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
+.suggestion-chip{padding:5px 12px;border:1px solid var(--bord);border-radius:14px;font-size:12px;cursor:pointer;background:var(--gris-clair);}
+.suggestion-chip:hover{background:var(--bleu);color:#fff;border-color:var(--bleu);}
+.dropzone{border:2px dashed var(--bord);border-radius:8px;padding:22px;text-align:center;color:var(--gris);font-size:13px;cursor:pointer;}
+.dropzone:hover{border-color:var(--bleu);color:var(--bleu);}
+.thumbs{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;}
+.thumb{width:90px;height:66px;border-radius:6px;overflow:hidden;position:relative;border:1px solid var(--bord);}
+.thumb img{width:100%;height:100%;object-fit:cover;}
+.thumb .rm{position:absolute;top:2px;right:2px;background:rgba(0,0,0,.6);color:#fff;border-radius:50%;width:18px;height:18px;font-size:12px;line-height:18px;text-align:center;cursor:pointer;}
+.top-actions{position:sticky;top:0;background:#faf9f6;padding:14px 0;display:flex;justify-content:space-between;z-index:5;}
+.file-count{font-size:12px;color:var(--gris);margin-left:6px;}
+
+/* --- Ecran editeur --- */
+#screen-editor .layout{display:flex;max-width:1200px;margin:0 auto;}
+.sidebar{width:270px;flex-shrink:0;background:#fff;border-right:1px solid var(--bord);min-height:100vh;padding:18px 0;}
+.sb-section{margin-bottom:2px;}
+.sb-section-head{display:flex;align-items:center;gap:8px;padding:9px 18px;cursor:pointer;font-size:13px;font-weight:bold;color:var(--bleu-fonce);}
+.sb-section-head:hover{background:var(--gris-clair);}
+.sb-section-head .chev{transition:.15s;font-size:11px;color:var(--gris);}
+.sb-section-head.open .chev{transform:rotate(90deg);}
+.sb-section.active .sb-section-head{background:#eaf2fa;}
+.sb-body{display:none;padding:2px 0 6px 34px;}
+.sb-body.open{display:block;}
+.sb-sub{padding:6px 10px;font-size:12px;color:#444;cursor:pointer;border-radius:5px;}
+.sb-sub:hover{background:var(--gris-clair);}
+.sb-photo-row{display:flex;align-items:center;gap:6px;padding:4px 10px;font-size:11px;color:var(--gris);}
+.sb-photo-row img{width:30px;height:22px;object-fit:cover;border-radius:3px;border:1px solid var(--bord);}
+.sb-photo-row .x{margin-left:auto;cursor:pointer;color:var(--rouge);font-weight:bold;}
+.main-editor{flex:1;padding:26px 34px 100px;min-width:0;}
+.section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+.section-header h2{font-size:19px;color:var(--bleu-fonce);margin:0;}
+.gen-ai-btn{font-size:12px;}
+.gen-ai-btn.loading{opacity:.6;cursor:not-allowed;}
+.photo-gallery{display:flex;flex-wrap:wrap;gap:12px;margin-top:14px;}
+.gallery-item{width:110px;cursor:pointer;text-align:center;}
+.gallery-item img{width:110px;height:80px;object-fit:cover;border-radius:6px;border:1px solid var(--bord);}
+.gallery-item span{font-size:11px;color:var(--gris);}
+.gallery-item.used{opacity:.35;}
+.inserted-photos{display:flex;flex-wrap:wrap;gap:16px;margin-top:16px;}
+.inserted-card{width:220px;border:1px solid var(--bord);border-radius:8px;overflow:hidden;background:#fdfdfc;}
+.inserted-card img{width:100%;height:150px;object-fit:cover;display:block;}
+.inserted-card .cap{padding:8px 10px;font-size:12px;color:#333;}
+.inserted-card .actions{display:flex;justify-content:flex-end;gap:6px;padding:0 8px 8px;}
+
+/* --- Modal annotation --- */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;align-items:center;justify-content:center;}
+.modal-overlay.open{display:flex;}
+.modal-box{background:#fff;border-radius:10px;padding:20px;max-width:92vw;max-height:92vh;overflow:auto;}
+.tool-row{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;}
+.tool-btn{width:36px;height:36px;border:1px solid var(--bord);border-radius:6px;background:#fff;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;}
+.tool-btn.active{border-color:var(--bleu);background:#eaf2fa;}
+.color-dot{width:22px;height:22px;border-radius:50%;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px var(--bord);}
+.color-dot.active{box-shadow:0 0 0 2px var(--texte);}
+#annot-canvas{border:1px solid var(--bord);max-width:80vw;max-height:60vh;cursor:crosshair;}
+.legend-row{margin-top:12px;}
+
+/* --- Preview --- */
+.preview-page{background:#fff;max-width:750px;margin:0 auto 30px;padding:40px 46px;border:1px solid var(--bord);box-shadow:0 1px 6px rgba(0,0,0,.05);}
+.ph-logo{font-family:Georgia,serif;}
+.ph-logo .nom{font-size:38px;font-weight:700;color:var(--bleu);}
+.ph-logo .sub1{font-size:19px;font-weight:700;color:var(--bleu);}
+.ph-logo .sub2{font-size:12px;font-weight:700;color:var(--bleu);margin-top:2px;}
+.ph-logo .adr{font-size:12px;font-weight:700;color:var(--bleu);margin-top:14px;line-height:1.5;}
+.ph-meta{margin-top:24px;font-size:13px;}
+.ph-meta .row2{display:flex;justify-content:space-between;margin-top:8px;}
+.ph-title-box{text-align:center;margin:26px 0 14px;}
+.ph-title-box span{display:inline-block;border:2px solid #1a1a1a;padding:6px 16px;font-weight:bold;font-size:14px;letter-spacing:.5px;}
+.ph-intervention-date{font-size:13px;font-weight:bold;margin-bottom:20px;}
+.ph-report-title{text-align:center;font-size:17px;font-weight:bold;margin:10px 0 26px;color:#111;}
+.ph-section-title{font-size:15px;font-weight:bold;color:var(--bleu-fonce);border-bottom:1px solid var(--gris-clair);padding-bottom:5px;margin:26px 0 10px;}
+.ph-text{font-size:13px;line-height:1.65;white-space:pre-wrap;}
+.ph-photos{display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;}
+.ph-photo{width:47%;}
+.ph-photo img{width:100%;border:1px solid var(--bord);border-radius:4px;}
+.ph-photo .cap{font-size:11.5px;margin-top:4px;color:#333;}
+
+.folder-status{font-size:12px;color:var(--gris);margin-top:8px;}
+.folder-status.ok{color:var(--vert);font-weight:bold;}
+
+.api-key-panel{background:#fef3cd;border:1px solid #ffc107;border-radius:8px;padding:12px 14px;margin-bottom:20px;font-size:12px;}
+.api-key-panel label{font-weight:bold;margin:0 0 6px;}
+.api-key-panel input{width:100%;}
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+<div class="modal-overlay" id="photo-modal"></div>
+
+<script>
+/* ============================================================
+   ETAT GLOBAL
+   ============================================================ */
+const state = {
+  screen: 'type',
+  reportType: null,
+  dirHandle: null,
+  affaireHandle: null,
+  dossierList: [],
+  dossier: '',
+  affaireNom: '',
+  affaireAdresse: '',
+  dateIntervention: '',
+  osText: '',
+  techReport: '',
+  photosBank: [],
+  titre: '',
+  activeSection: 'intro',
+  openSections: { intro: true, hyp: false, tests: false, conclusion: false, travaux: false },
+  sections: {
+    intro: { label: 'Introduction', hasPhotos: true, text: '', photos: [] },
+    hyp: { label: 'Hypothèses et constatations', hasPhotos: true, text: '', photos: [] },
+    tests: { label: 'Tests réalisés', hasPhotos: true, text: '', photos: [] },
+    conclusion: { label: 'Conclusion', hasPhotos: false, text: '', photos: [] },
+    travaux: { label: 'Travaux à préconiser', hasPhotos: false, text: '', photos: [] },
+  },
+  apiKey: localStorage.getItem('openai_api_key') || '',
+};
+
+function uid() { return Math.random().toString(36).slice(2, 10); }
+
+function todayFR() {
+  const d = new Date();
+  const mois = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+  return `${d.getDate()} ${mois[d.getMonth()]} ${d.getFullYear()}`;
+}
+function dateDDMMYY(iso) {
+  if (!iso) return 'XX-XX-XX';
+  const [y,m,d] = iso.split('-');
+  return `${d}-${m}-${y.slice(2)}`;
+}
+function dateDDMMYYYY(iso) {
+  if (!iso) return '';
+  const [y,m,d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function render() {
+  const app = document.getElementById('app');
+  if (state.screen === 'type') app.innerHTML = renderScreenType();
+  else if (state.screen === 'setup') app.innerHTML = renderScreenSetup();
+  else if (state.screen === 'editor') app.innerHTML = renderScreenEditor();
+  else if (state.screen === 'preview') app.innerHTML = renderScreenPreview();
+  attachHandlers();
+}
+
+/* ============================================================
+   ECRAN 1 — CHOIX DU TYPE
+   ============================================================ */
+function renderScreenType() {
+  return `
+  <div id="screen-type" class="screen active">
+    <div class="type-wrap">
+      <h1>Générateur de rapports — Réalba Étanchéité</h1>
+      <p class="sub">Choisissez le type de rapport à créer</p>
+      <div class="type-cards">
+        <div class="type-card" data-type="fuite">
+          <div class="num">1</div>
+          <h3>Recherche de fuite</h3>
+          <p>Diagnostic, hypothèses, tests, conclusion</p>
+        </div>
+        <div class="type-card disabled">
+          <div class="num">2</div>
+          <h3>Travaux de reprise après diagnostic</h3>
+          <p>Bientôt disponible</p>
+        </div>
+        <div class="type-card disabled">
+          <div class="num">3</div>
+          <h3>Chantier</h3>
+          <p>Bientôt disponible</p>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ============================================================
+   ECRAN 2 — DOSSIER / AFFAIRE / FICHIERS
+   ============================================================ */
+function renderScreenSetup() {
+  const folderOk = !!state.dirHandle;
+  return `
+  <div id="screen-setup" class="screen active">
+    <div class="wrap">
+      <div class="top-actions">
+        <button class="btn" id="back-type">&larr; Retour</button>
+        <button class="btn btn-primary" id="go-editor" ${canProceedSetup() ? '' : 'disabled'}>Continuer &rarr;</button>
+      </div>
+
+      <div class="api-key-panel">
+        <label>🔑 Clé API OpenAI (optionnel mais recommandé pour l'IA)</label>
+        <input type="password" id="api-key-input" placeholder="sk-..." value="${state.apiKey}">
+        <div class="hint" style="margin-top:4px;">Votre clé n'est jamais envoyée aux serveurs — elle reste locale. Obtenez une clé sur <a href="https://platform.openai.com/account/api-keys" target="_blank">platform.openai.com</a></div>
+      </div>
+
+      <div class="panel">
+        <h2>1. Dossier des affaires</h2>
+        <button class="btn" id="pick-folder">${folderOk ? 'Changer de dossier' : 'Choisir le dossier "Affaires" sur mon ordinateur'}</button>
+        <div class="folder-status ${folderOk ? 'ok' : ''}">${folderOk ? '✓ Dossier connecté — les rapports générés y seront enregistrés automatiquement' : 'Requiert Chrome ou Edge. Sans ce dossier, les fichiers seront simplement téléchargés.'}</div>
+
+        <label>Numéro de dossier (affaire)</label>
+        <input type="text" id="dossier-input" placeholder="ex : 2796" value="${state.dossier}">
+        ${state.dossierList.length ? `<div class="suggestions">${state.dossierList.map(d=>`<span class="suggestion-chip" data-dossier="${d}">${d}</span>`).join('')}</div>` : ''}
+        <div class="hint">Tapez le numéro ou choisissez une affaire existante ci-dessus.</div>
+      </div>
+
+      <div class="panel">
+        <h2>2. Ordre de service (PDF ou texte du mail)</h2>
+        <div class="dropzone" id="os-drop">Cliquez pour déposer l'OS (PDF) — ou collez le texte du mail ci-dessous</div>
+        <input type="file" id="os-file" accept="application/pdf" style="display:none">
+        <label>Ou collez ici le texte de l'OS / du mail</label>
+        <textarea id="os-text" rows="4" placeholder="Merci d'intervenir sur la toiture terrasse pour fuite dans l'appartement de Mme Dupont...">${state.osText}</textarea>
+
+        <label>Nom de l'affaire (adresse de l'immeuble)</label>
+        <input type="text" id="affaire-nom" placeholder="ex : Immeuble 28/30, rue d'Issy, 92100 Boulogne-Billancourt" value="${state.affaireNom}">
+        <div class="hint">Proposée automatiquement à partir de l'OS déposé — modifiable.</div>
+      </div>
+
+      <div class="panel">
+        <h2>3. Date d'intervention</h2>
+        <input type="date" id="date-intervention" value="${state.dateIntervention}">
+        <div class="hint">La date de rédaction du rapport (aujourd'hui, ${todayFR()}) sera ajoutée automatiquement — elle peut différer de la date d'intervention.</div>
+      </div>
+
+      <div class="panel">
+        <h2>4. Rapport brut du technicien</h2>
+        <textarea id="tech-report" rows="8" placeholder="Collez ici les notes / le compte-rendu brut du technicien (accès, observations, tests réalisés, résultat...)">${state.techReport}</textarea>
+        <div class="hint">Ce texte servira de base pour proposer automatiquement le contenu de chaque section avec l'IA.</div>
+      </div>
+
+      <div class="panel">
+        <h2>5. Toutes les photos de l'intervention</h2>
+        <div class="dropzone" id="photos-drop">Cliquez pour ajouter vos photos <span class="file-count">(${state.photosBank.length} photo${state.photosBank.length>1?'s':''} ajoutée${state.photosBank.length>1?'s':''})</span></div>
+        <input type="file" id="photos-file" accept="image/*" multiple style="display:none">
+        <div class="thumbs">
+          ${state.photosBank.map(p => `<div class="thumb"><img src="${p.dataURL}"><div class="rm" data-rm-photo="${p.id}">×</div></div>`).join('')}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function canProceedSetup() {
+  return state.dossier && state.affaireNom && state.dateIntervention;
+}
+
+function guessAddressFromText(text) {
+  const lines = text.split(/\n/).map(l => l.trim()).filter(Boolean);
+  for (let i = 0; i < lines.length; i++) {
+    if (/\b\d{5}\b/.test(lines[i])) {
+      const prev = lines[i-1] || '';
+      return (prev + ' ' + lines[i]).trim();
+    }
+  }
+  return '';
+}
+
+function guessTitleFromText(text) {
+  const t = text.toLowerCase();
+  let personne = '';
+  const mMatch = t.match(/(mme|monsieur|m\.|madame)\s+([a-zàâéèêëîïôûüç\-]+)/i);
+  if (mMatch) personne = `${mMatch[1].replace(/^m\.$/i,'M.')} ${capitalize(mMatch[2])}`;
+  let origine = '';
+  if (t.includes('toiture-terrasse') || t.includes('toiture terrasse') || t.includes('toit terrasse')) origine = 'toit-terrasse';
+  else if (t.includes('terrasse')) origine = 'terrasse';
+  else if (t.includes('balcon')) origine = 'balcon';
+  else if (t.includes('acrotère')) origine = 'acrotère';
+  let base = 'Recherche de fuite';
+  if (personne) base += ` dans l'appartement de ${personne}`;
+  if (origine) base += ` provenant du ${origine}`;
+  return base;
+}
+function capitalize(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
+
+/* ============================================================
+   GENERATION DE TEXTE AVEC IA (OpenAI)
+   ============================================================ */
+async function generateAIText(sectionKey) {
+  if (!state.apiKey) {
+    alert('Veuillez configurer votre clé API OpenAI à l\'étape précédente.');
+    return null;
+  }
+
+  const tech = state.techReport.trim();
+  if (!tech) {
+    alert('Veuillez remplir le rapport brut du technicien pour générer du texte avec l\'IA.');
+    return null;
+  }
+
+  const prompts = {
+    intro: `À partir du rapport technique suivant, rédige une section "Introduction" professionnelle pour un rapport d'intervention de recherche de fuite. 
+La section doit décrire :
+- La date et le lieu de l'intervention
+- L'accès à l'immeuble, l'appartement et le toit-terrasse
+- Une brève introduction au contexte
+
+Rapport technique : "${tech}"
+
+Rédige uniquement la section Introduction, de manière concise et professionnelle.`,
+
+    hyp: `À partir du rapport technique suivant, rédige une section "Hypothèses et constatations" en extrayant UNIQUEMENT les observations pertinentes du technicien (constatations visuelles, dégâts observés, zones problématiques, etc.).
+Ne reprends que les éléments d'observation, pas les tests. Reformule de manière professionnelle et structurée.
+
+Rapport technique : "${tech}"
+
+Rédige uniquement la section Hypothèses et constatations.`,
+
+    tests: `À partir du rapport technique suivant, rédige une section "Tests réalisés" en décrivant UNIQUEMENT les tests et vérifications effectués par le technicien.
+Inclus : la méthode utilisée (test au colorant, mise en eau, relevé d'humidité, etc.) et les résultats observés.
+Reformule de manière professionnelle.
+
+Rapport technique : "${tech}"
+
+Rédige uniquement la section Tests réalisés.`,
+
+    conclusion: `À partir du rapport technique suivant, rédige une section "Conclusion" qui synthétise :
+- L'origine exacte de la fuite identifiée
+- Le lien de cause à effet avec les dégâts observés
+- Une affirmation claire du diagnostic
+
+Reformule de manière professionnelle et concise.
+
+Rapport technique : "${tech}"
+
+Rédige uniquement la section Conclusion.`,
+
+    travaux: `À partir du rapport technique suivant, rédige une section "Travaux à préconiser" listant les travaux de reprise d'étanchéité recommandés.
+Sois spécifique sur l'endroit exact à réparer et les préconisations complémentaires.
+Utilise une format lisible avec des tirets.
+
+Rapport technique : "${tech}"
+
+Rédige uniquement la section Travaux à préconiser.`
+  };
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${state.apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'user',
+            content: prompts[sectionKey]
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 800
+      })
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error?.message || 'Erreur API OpenAI');
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content.trim();
+  } catch (e) {
+    alert(`Erreur IA : ${e.message}`);
+    return null;
+  }
+}
+
+/* ============================================================
+   ECRAN 3 — EDITEUR (sidebar + sections)
+   ============================================================ */
+function renderScreenEditor() {
+  const sec = state.sections[state.activeSection];
+  const usedIds = new Set(sec.photos.map(p => p.sourceId));
+  return `
+  <div id="screen-editor" class="screen active">
+    <div class="top-actions" style="max-width:1200px;margin:0 auto;padding:14px 34px;">
+      <button class="btn" id="back-setup">&larr; Retour</button>
+      <button class="btn btn-primary" id="go-preview">Aperçu &rarr;</button>
+    </div>
+    <div class="layout">
+      <div class="sidebar">
+        ${Object.keys(state.sections).map(key => renderSidebarSection(key)).join('')}
+      </div>
+      <div class="main-editor">
+        <label>Titre du rapport</label>
+        <input type="text" id="titre-input" value="${state.titre}" style="font-size:15px;font-weight:bold;margin-bottom:24px;">
+
+        <div class="section-header">
+          <h2>${sec.label}</h2>
+          <button class="btn btn-small gen-ai-btn" id="gen-text-btn">Proposer avec l'IA</button>
+        </div>
+        <textarea id="section-text" rows="7">${sec.text}</textarea>
+
+        ${sec.hasPhotos ? `
+        <h3 style="font-size:14px;color:var(--gris);margin:22px 0 4px;">Photos insérées dans cette section</h3>
+        <div class="inserted-photos">
+          ${sec.photos.map(p => `
+            <div class="inserted-card">
+              <img src="${p.dataURL}">
+              <div class="cap">${p.legend || '<em>sans légende</em>'}</div>
+              <div class="actions">
+                <button class="btn btn-small" data-edit-inserted="${p.id}">Modifier</button>
+                <button class="btn btn-small btn-danger" data-rm-inserted="${p.id}">Retirer</button>
+              </div>
+            </div>`).join('') || '<p class="hint">Aucune photo insérée pour l\'instant.</p>'}
+        </div>
+
+        <h3 style="font-size:14px;color:var(--gris);margin:22px 0 4px;">Banque de photos — cliquez pour insérer</h3>
+        <div class="photo-gallery">
+          ${state.photosBank.map(p => `
+            <div class="gallery-item" data-pick-photo="${p.id}">
+              <img src="${p.dataURL}">
+              <span>Insérer</span>
+            </div>`).join('') || '<p class="hint">Aucune photo disponible — retournez à l\'étape précédente pour en ajouter.</p>'}
+        </div>` : `<p class="hint" style="margin-top:16px;">Cette section ne contient pas de photos.</p>`}
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderSidebarSection(key) {
+  const sec = state.sections[key];
+  const open = state.openSections[key];
+  const active = state.activeSection === key;
+  return `
+  <div class="sb-section ${active ? 'active' : ''}">
+    <div class="sb-section-head ${open ? 'open' : ''}" data-toggle-section="${key}">
+      <span class="chev">&#9656;</span> ${sec.label}
+    </div>
+    <div class="sb-body ${open ? 'open' : ''}">
+      <div class="sb-sub" data-goto-text="${key}">📝 Texte</div>
+      ${sec.hasPhotos ? `<div class="sb-sub" data-goto-photos="${key}">🖼 Photos (${sec.photos.length})</div>` : ''}
+      ${sec.hasPhotos ? sec.photos.map(p => `
+        <div class="sb-photo-row">
+          <img src="${p.dataURL}">
+          <span>${(p.legend||'sans légende').slice(0,18)}</span>
+          <span class="x" data-rm-inserted-sb="${key}|${p.id}">×</span>
+        </div>`).join('') : ''}
+    </div>
+  </div>`;
+}
+
+/* ============================================================
+   MODAL ANNOTATION PHOTO
+   ============================================================ */
+let annotState = null;
+
+function openPhotoModal(photoBankId, existingInserted) {
+  const source = existingInserted
+    ? { dataURL: existingInserted.baseDataURL || existingInserted.dataURL }
+    : state.photosBank.find(p => p.id === photoBankId);
+  if (!source) return;
+
+  const modal = document.getElementById('photo-modal');
+  modal.innerHTML = `
+    <div class="modal-box">
+      <div class="tool-row">
+        <button class="tool-btn" data-tool="rect" title="Rectangle">▭</button>
+        <button class="tool-btn" data-tool="circle" title="Cercle">◯</button>
+        <button class="tool-btn" data-tool="line" title="Ligne">╱</button>
+        <button class="tool-btn" data-tool="arrow" title="Flèche">➜</button>
+        <span style="width:1px;height:24px;background:#ddd;margin:0 6px;"></span>
+        ${['#e24b4a','#ef9f27','#1d9e75','#378add','#f5f5f5','#1a1a1a'].map(c=>`<div class="color-dot" data-color="${c}" style="background:${c};"></div>`).join('')}
+        <span style="width:1px;height:24px;background:#ddd;margin:0 6px;"></span>
+        <button class="tool-btn" id="undo-btn" title="Annuler">↺</button>
+      </div>
+      <canvas id="annot-canvas"></canvas>
+      <div class="legend-row">
+        <label>Légende de la photo</label>
+        <input type="text" id="legend-input" placeholder="ex : Reprise d'étanchéité en about de relevé" value="${existingInserted ? (existingInserted.legend||'') : ''}">
+      </div>
+      <div style="margin-top:14px;display:flex;justify-content:flex-end;gap:10px;">
+        <button class="btn" id="cancel-annot">Annuler</button>
+        <button class="btn btn-primary" id="insert-annot">Insérer dans la section</button>
+      </div>
+    </div>`;
+  modal.classList.add('open');
+
+  const canvas = document.getElementById('annot-canvas');
+  const ctx = canvas.getContext('2d');
+  const img = new Image();
+  img.onload = () => {
+    const maxW = window.innerWidth * 0.78, maxH = window.innerHeight * 0.55;
+    let w = img.width, h = img.height;
+    const scale = Math.min(maxW / w, maxH / h, 1);
+    w *= scale; h *= scale;
+    canvas.width = w; canvas.height = h;
+    annotState = { img, shapes: (existingInserted && existingInserted.shapes) ? JSON.parse(JSON.stringify(existingInserted.shapes)) : [], tool: 'rect', color: '#e24b4a', drawing: false, start: null, photoBankId };
+    redrawCanvas();
+  };
+  img.src = source.dataURL;
+
+  modal.querySelectorAll('[data-tool]').forEach(btn => btn.onclick = () => {
+    annotState.tool = btn.dataset.tool;
+    modal.querySelectorAll('[data-tool]').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+  modal.querySelectorAll('[data-color]').forEach(dot => dot.onclick = () => {
+    annotState.color = dot.dataset.color;
+    modal.querySelectorAll('[data-color]').forEach(d=>d.classList.remove('active'));
+    dot.classList.add('active');
+  });
+  modal.querySelector('[data-tool="rect"]').classList.add('active');
+  modal.querySelector('[data-color="#e24b4a"]').classList.add('active');
+
+  document.getElementById('undo-btn').onclick = () => { annotState.shapes.pop(); redrawCanvas(); };
+  document.getElementById('cancel-annot').onclick = closePhotoModal;
+  document.getElementById('insert-annot').onclick = () => insertAnnotatedPhoto(existingInserted);
+
+  canvas.onmousedown = e => {
+    const r = canvas.getBoundingClientRect();
+    annotState.drawing = true;
+    annotState.start = { x: e.clientX - r.left, y: e.clientY - r.top };
+  };
+  canvas.onmousemove = e => {
+    if (!annotState.drawing) return;
+    const r = canvas.getBoundingClientRect();
+    const cur = { x: e.clientX - r.left, y: e.clientY - r.top };
+    redrawCanvas();
+    drawShape(ctx, { type: annotState.tool, color: annotState.color, x1: annotState.start.x, y1: annotState.start.y, x2: cur.x, y2: cur.y });
+  };
+  canvas.onmouseup = e => {
+    if (!annotState.drawing) return;
+    const r = canvas.getBoundingClientRect();
+    const cur = { x: e.clientX - r.left, y: e.clientY - r.top };
+    annotState.shapes.push({ type: annotState.tool, color: annotState.color, x1: annotState.start.x, y1: annotState.start.y, x2: cur.x, y2: cur.y });
+    annotState.drawing = false;
+    redrawCanvas();
+  };
+}
+
+function redrawCanvas() {
+  const canvas = document.getElementById('annot-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(annotState.img, 0, 0, canvas.width, canvas.height);
+  annotState.shapes.forEach(s => drawShape(ctx, s));
+}
+
+function drawShape(ctx, s) {
+  ctx.strokeStyle = s.color; ctx.lineWidth = 3; ctx.fillStyle = s.color;
+  if (s.type === 'rect') {
+    ctx.strokeRect(s.x1, s.y1, s.x2-s.x1, s.y2-s.y1);
+  } else if (s.type === 'circle') {
+    const rx = Math.abs(s.x2-s.x1)/2, ry = Math.abs(s.y2-s.y1)/2;
+    const cx = (s.x1+s.x2)/2, cy = (s.y1+s.y2)/2;
+    ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI*2); ctx.stroke();
+  } else if (s.type === 'line') {
+    ctx.beginPath(); ctx.moveTo(s.x1,s.y1); ctx.lineTo(s.x2,s.y2); ctx.stroke();
+  } else if (s.type === 'arrow') {
+    ctx.beginPath(); ctx.moveTo(s.x1,s.y1); ctx.lineTo(s.x2,s.y2); ctx.stroke();
+    const angle = Math.atan2(s.y2-s.y1, s.x2-s.x1);
+    const size = 12;
+    ctx.beginPath();
+    ctx.moveTo(s.x2, s.y2);
+    ctx.lineTo(s.x2 - size*Math.cos(angle-0.4), s.y2 - size*Math.sin(angle-0.4));
+    ctx.lineTo(s.x2 - size*Math.cos(angle+0.4), s.y2 - size*Math.sin(angle+0.4));
+    ctx.closePath(); ctx.fill();
+  }
+}
+
+function insertAnnotatedPhoto(existingInserted) {
+  const canvas = document.getElementById('annot-canvas');
+  const flattened = canvas.toDataURL('image/jpeg', 0.9);
+  const legend = document.getElementById('legend-input').value;
+  const sec = state.sections[state.activeSection];
+  if (existingInserted) {
+    existingInserted.dataURL = flattened;
+    existingInserted.legend = legend;
+    existingInserted.shapes = JSON.parse(JSON.stringify(annotState.shapes));
+  } else {
+    sec.photos.push({ id: uid(), sourceId: annotState.photoBankId, dataURL: flattened, legend, shapes: JSON.parse(JSON.stringify(annotState.shapes)) });
+  }
+  closePhotoModal();
+  render();
+}
+function closePhotoModal() {
+  document.getElementById('photo-modal').classList.remove('open');
+  annotState = null;
+}
+
+/* ============================================================
+   ECRAN 4 — APERCU + GENERATION
+   ============================================================ */
+function renderScreenPreview() {
+  return `
+  <div id="screen-preview" class="screen active">
+    <div class="wrap">
+      <div class="top-actions">
+        <button class="btn" id="back-editor">&larr; Retour à l'édition</button>
+        <button class="btn btn-primary" id="generate-btn">Générer le rapport (Word + PDF)</button>
+      </div>
+      <div id="preview-render" class="preview-page">
+        ${buildPreviewHTML()}
+      </div>
+    </div>
+  </div>`;
+}
+
+function buildPreviewHTML() {
+  const s = state;
+  return `
+    <div class="ph-logo">
+      <span class="nom">realba</span> <span class="sub1">ÉTANCHÉITÉ</span>
+      <div class="sub2">ISOLATION THERMIQUE et ETANCHEITE des TOITURES TERRASSES</div>
+      <div class="adr">23, Grande Rue du 8 Mai 1945<br>91430 VAUHALLAN</div>
+    </div>
+    <div class="ph-meta">
+      <div><b>DOSSIER : </b>${s.dossier}</div>
+      <div class="row2">
+        <div><b>AFFAIRE : </b>${s.affaireNom}</div>
+        <div><em>Vauhallan, le ${todayFR()}</em></div>
+      </div>
+    </div>
+    <div class="ph-title-box"><span>RAPPORT D'INTERVENTION</span></div>
+    <div class="ph-intervention-date">Intervention du ${dateDDMMYYYY(s.dateIntervention)}</div>
+    <div class="ph-report-title">${s.titre}</div>
+    ${Object.keys(s.sections).map(key => {
+      const sec = s.sections[key];
+      return `
+        <div class="ph-section-title">${sec.label}</div>
+        <div class="ph-text">${escapeHtml(sec.text)}</div>
+        ${sec.photos.length ? `<div class="ph-photos">${sec.photos.map(p => `
+          <div class="ph-photo"><img src="${p.dataURL}"><div class="cap">${p.legend||''}</div></div>`).join('')}</div>` : ''}
+      `;
+    }).join('')}
+  `;
+}
+function escapeHtml(t){ const d=document.createElement('div'); d.innerText=t||''; return d.innerHTML; }
+
+/* ============================================================
+   GENERATION DOCX
+   ============================================================ */
+async function dataURLToUint8(dataURL) {
+  const res = await fetch(dataURL);
+  const buf = await res.arrayBuffer();
+  return new Uint8Array(buf);
+}
+
+async function generateDocx() {
+  const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType,
+          AlignmentType, ImageRun, BorderStyle, ShadingType } = docx;
+
+  const NAVY = "0C447C";
+  const children = [];
+
+  children.push(new Paragraph({ children: [
+    new TextRun({ text: "realba ", bold: true, size: 44, color: "2E75B6", font: "Georgia" }),
+    new TextRun({ text: "ÉTANCHÉITÉ", bold: true, size: 26, color: "2E75B6", font: "Georgia" }),
+  ]}));
+  children.push(new Paragraph({ children: [ new TextRun({ text: "ISOLATION THERMIQUE et ETANCHEITE des TOITURES TERRASSES", bold: true, size: 18, color: "2E75B6", font: "Georgia" }) ] }));
+  children.push(new Paragraph({ spacing: { before: 120 }, children: [ new TextRun({ text: "23, Grande Rue du 8 Mai 1945", bold: true, size: 18, color: "2E75B6", font: "Georgia" }) ] }));
+  children.push(new Paragraph({ children: [ new TextRun({ text: "91430 VAUHALLAN", bold: true, size: 18, color: "2E75B6", font: "Georgia" }) ] }));
+
+  children.push(new Paragraph({ spacing: { before: 300 }, children: [ new TextRun({ text: `DOSSIER : `, bold: true, size: 20 }), new TextRun({ text: state.dossier, size: 20 }) ] }));
+  children.push(new Paragraph({ children: [
+    new TextRun({ text: `AFFAIRE : `, bold: true, size: 20 }), new TextRun({ text: state.affaireNom, size: 20 }),
+    new TextRun({ text: `\t\tVauhallan, le ${todayFR()}`, italics: true, size: 20 }),
+  ]}));
+
+  children.push(new Paragraph({
+    alignment: AlignmentType.CENTER, spacing: { before: 400, after: 200 },
+    border: { top:{style:BorderStyle.SINGLE,size:12,color:"1A1A1A"}, bottom:{style:BorderStyle.SINGLE,size:12,color:"1A1A1A"}, left:{style:BorderStyle.SINGLE,size:12,color:"1A1A1A"}, right:{style:BorderStyle.SINGLE,size:12,color:"1A1A1A"} },
+    children: [ new TextRun({ text: "RAPPORT D'INTERVENTION", bold: true, size: 26 }) ]
+  }));
+  children.push(new Paragraph({ children: [ new TextRun({ text: `Intervention du ${dateDDMMYYYY(state.dateIntervention)}`, bold: true, size: 22 }) ] }));
+  children.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200, after: 300 }, children: [ new TextRun({ text: state.titre, bold: true, size: 26 }) ] }));
+
+  for (const key of Object.keys(state.sections)) {
+    const sec = state.sections[key];
+    children.push(new Paragraph({
+      spacing: { before: 360, after: 120 },
+      border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: NAVY } },
+      children: [ new TextRun({ text: sec.label, bold: true, size: 24, color: NAVY }) ]
+    }));
+    for (const para of (sec.text||'').split('\n')) {
+      children.push(new Paragraph({ spacing: { after: 100 }, children: [ new TextRun({ text: para, size: 21 }) ] }));
+    }
+    for (const p of sec.photos) {
+      const bytes = await dataURLToUint8(p.dataURL);
+      children.push(new Paragraph({
+        alignment: AlignmentType.CENTER, spacing: { before: 150 },
+        children: [ new ImageRun({ type: "jpg", data: bytes, transformation: { width: 400, height: 280 } }) ]
+      }));
+      children.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 150 }, children: [ new TextRun({ text: p.legend||'', italics: true, size: 19 }) ] }));
+    }
+  }
+
+  const doc = new Document({ sections: [{ properties: { page: { size: { width: 11906, height: 16838 } } }, children }] });
+  return Packer.toBlob(doc);
+}
+
+/* ============================================================
+   GENERATION PDF (depuis l'apercu HTML)
+   ============================================================ */
+async function generatePdf() {
+  const node = document.getElementById('preview-render');
+  const canvas = await html2canvas(node, { scale: 2, useCORS: true });
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF('p', 'pt', 'a4');
+  const pageW = pdf.internal.pageSize.getWidth();
+  const pageH = pdf.internal.pageSize.getHeight();
+  const imgW = pageW;
+  const imgH = canvas.height * imgW / canvas.width;
+  let heightLeft = imgH, position = 0;
+  const imgData = canvas.toDataURL('image/jpeg', 0.92);
+  pdf.addImage(imgData, 'JPEG', 0, position, imgW, imgH);
+  heightLeft -= pageH;
+  while (heightLeft > 0) {
+    position = heightLeft - imgH;
+    pdf.addPage();
+    pdf.addImage(imgData, 'JPEG', 0, position, imgW, imgH);
+    heightLeft -= pageH;
+  }
+  return pdf.output('blob');
+}
+
+async function saveFile(blob, filename) {
+  if (state.affaireHandle) {
+    try {
+      const fh = await state.affaireHandle.getFileHandle(filename, { create: true });
+      const writable = await fh.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return true;
+    } catch (e) { console.error(e); }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+  return false;
+}
+
+/* ============================================================
+   HANDLERS
+   ============================================================ */
+function attachHandlers() {
+  const $ = sel => document.querySelector(sel);
+  const $$ = sel => document.querySelectorAll(sel);
+
+  if (state.screen === 'type') {
+    $$('.type-card').forEach(card => {
+      if (card.classList.contains('disabled')) return;
+      card.onclick = () => { state.reportType = card.dataset.type; state.screen = 'setup'; render(); };
+    });
+  }
+
+  if (state.screen === 'setup') {
+    $('#back-type').onclick = () => { state.screen = 'type'; render(); };
+    $('#go-editor').onclick = () => { if (canProceedSetup()) { state.screen = 'editor'; render(); } };
+
+    $('#api-key-input').oninput = e => {
+      state.apiKey = e.target.value;
+      localStorage.setItem('openai_api_key', state.apiKey);
+    };
+
+    $('#pick-folder').onclick = async () => {
+      try {
+        state.dirHandle = await window.showDirectoryPicker();
+        state.dossierList = [];
+        for await (const [name, handle] of state.dirHandle.entries()) {
+          if (handle.kind === 'directory') state.dossierList.push(name);
+        }
+        render();
+      } catch (e) { console.log('Sélection annulée', e); }
+    };
+
+    $('#dossier-input').oninput = e => { state.dossier = e.target.value; refreshButtons(); };
+    $$('.suggestion-chip').forEach(chip => chip.onclick = async () => {
+      state.dossier = chip.dataset.dossier;
+      if (state.dirHandle) {
+        try { state.affaireHandle = await state.dirHandle.getDirectoryHandle(state.dossier, { create: true }); } catch(e){}
+      }
+      render();
+    });
+
+    $('#os-drop').onclick = () => $('#os-file').click();
+    $('#os-file').onchange = async e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+      let text = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        text += content.items.map(it => it.str).join(' ') + '\n';
+      }
+      state.osText = text;
+      state.affaireNom = guessAddressFromText(text) || state.affaireNom;
+      state.titre = guessTitleFromText(text);
+      render();
+    };
+    $('#os-text').oninput = e => { state.osText = e.target.value; };
+    $('#os-text').onblur = e => {
+      if (!state.affaireNom) state.affaireNom = guessAddressFromText(e.target.value);
+      if (!state.titre) state.titre = guessTitleFromText(e.target.value);
+      render();
+    };
+    $('#affaire-nom').oninput = e => { state.affaireNom = e.target.value; refreshButtons(); };
+    $('#date-intervention').oninput = e => { state.dateIntervention = e.target.value; refreshButtons(); };
+    $('#tech-report').oninput = e => { state.techReport = e.target.value; };
+
+    $('#photos-drop').onclick = () => $('#photos-file').click();
+    $('#photos-file').onchange = e => {
+      [...e.target.files].forEach(file => {
+        const reader = new FileReader();
+        reader.onload = ev => {
+          state.photosBank.push({ id: uid(), name: file.name, dataURL: ev.target.result });
+          render();
+        };
+        reader.readAsDataURL(file);
+      });
+    };
+    $$('[data-rm-photo]').forEach(el => el.onclick = () => {
+      state.photosBank = state.photosBank.filter(p => p.id !== el.dataset.rmPhoto);
+      render();
+    });
+  }
+
+  if (state.screen === 'editor') {
+    $('#back-setup').onclick = () => { state.screen = 'setup'; render(); };
+    $('#go-preview').onclick = () => { state.screen = 'preview'; render(); };
+    $('#titre-input').oninput = e => { state.titre = e.target.value; };
+    $('#section-text').oninput = e => { state.sections[state.activeSection].text = e.target.value; };
+    $('#gen-text-btn').onclick = async () => {
+      const btn = document.getElementById('gen-text-btn');
+      btn.classList.add('loading');
+      btn.disabled = true;
+      btn.textContent = 'Génération IA en cours...';
+      const text = await generateAIText(state.activeSection);
+      if (text) {
+        state.sections[state.activeSection].text = text;
+        render();
+      } else {
+        btn.classList.remove('loading');
+        btn.disabled = false;
+        btn.textContent = 'Proposer avec l\'IA';
+      }
+    };
+
+    $$('[data-toggle-section]').forEach(el => el.onclick = () => {
+      const key = el.dataset.toggleSection;
+      state.openSections[key] = !state.openSections[key];
+      state.activeSection = key;
+      render();
+    });
+    $$('[data-goto-text]').forEach(el => el.onclick = () => { state.activeSection = el.dataset.gotoText; state.openSections[el.dataset.gotoText] = true; render(); });
+    $$('[data-goto-photos]').forEach(el => el.onclick = () => { state.activeSection = el.dataset.gotoPhotos; state.openSections[el.dataset.gotoPhotos] = true; render(); });
+    $$('[data-rm-inserted-sb]').forEach(el => el.onclick = (ev) => {
+      ev.stopPropagation();
+      const [key, id] = el.dataset.rmInsertedSb.split('|');
+      state.sections[key].photos = state.sections[key].photos.filter(p => p.id !== id);
+      render();
+    });
+    $$('[data-pick-photo]').forEach(el => el.onclick = () => openPhotoModal(el.dataset.pickPhoto, null));
+    $$('[data-edit-inserted]').forEach(el => el.onclick = () => {
+      const sec = state.sections[state.activeSection];
+      const p = sec.photos.find(x => x.id === el.dataset.editInserted);
+      openPhotoModal(null, p);
+    });
+    $$('[data-rm-inserted]').forEach(el => el.onclick = () => {
+      const sec = state.sections[state.activeSection];
+      sec.photos = sec.photos.filter(p => p.id !== el.dataset.rmInserted);
+      render();
+    });
+  }
+
+  if (state.screen === 'preview') {
+    $('#back-editor').onclick = () => { state.screen = 'editor'; render(); };
+    $('#generate-btn').onclick = async () => {
+      const btn = $('#generate-btn');
+      btn.disabled = true; btn.textContent = 'Génération en cours...';
+      try {
+        const filenameBase = `RAP-${state.dossier}-${dateDDMMYY(state.dateIntervention)}`;
+        const docxBlob = await generateDocx();
+        const pdfBlob = await generatePdf();
+        const okDocx = await saveFile(docxBlob, filenameBase + '.docx');
+        const okPdf = await saveFile(pdfBlob, filenameBase + '.pdf');
+        btn.textContent = (okDocx || okPdf) ? '✓ Rapport enregistré dans le dossier affaire' : '✓ Fichiers téléchargés';
+      } catch (e) {
+        console.error(e);
+        btn.textContent = 'Erreur — voir la console';
+      }
+      btn.disabled = false;
+    };
+  }
+}
+
+function refreshButtons() {
+  const btn = document.getElementById('go-editor');
+  if (btn) btn.disabled = !canProceedSetup();
+}
+
+render();
+
+</script>
+</body>
+</html>
